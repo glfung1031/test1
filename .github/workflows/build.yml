@@ -3,12 +3,12 @@ name: Build APK
 on:
   push:
     branches: [main]
-  pull_request:
-  workflow_dispatch:        # lets you run it manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -17,7 +17,10 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
+      # The Android SDK is already installed on GitHub's Ubuntu runners.
+      # Accept its licences so Gradle can fetch any missing platform pieces.
+      - name: Accept Android licences
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       # Installs Gradle itself, so no gradlew wrapper file is needed
       - uses: gradle/actions/setup-gradle@v4
@@ -25,7 +28,7 @@ jobs:
           gradle-version: 8.9
 
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
