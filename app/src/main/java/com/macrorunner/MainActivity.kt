@@ -57,6 +57,7 @@ class MacroViewModel(app: Application) : AndroidViewModel(app) {
     fun delete(id: String) {
         MacroEngine.stop(id)
         Scheduler.cancel(getApplication(), id)
+        RunLog.clear(getApplication(), id)
         macros.removeAll { it.id == id }
         persist()
     }
@@ -69,6 +70,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        RunLog.load(this)
         setContent { MacroTheme { AppRoot(vm, tick.intValue) } }
     }
 
@@ -103,6 +105,7 @@ fun HomeScreen(vm: MacroViewModel, tick: Int, onNew: () -> Unit, onEdit: (Macro)
     val ctx = LocalContext.current
     val connected by MacroAccessibilityService.connected.collectAsState()
     val running by MacroEngine.running.collectAsState()
+    val lastRuns by RunLog.lastRun.collectAsState()
     val canExact = remember(tick) { Scheduler.canExact(ctx) }
     var deleteTarget by remember { mutableStateOf<Macro?>(null) }
 
@@ -155,7 +158,7 @@ fun HomeScreen(vm: MacroViewModel, tick: Int, onNew: () -> Unit, onEdit: (Macro)
 
             items(vm.macros, key = { it.id }) { m ->
                 MacroCard(
-                    m, running = m.id in running,
+                    m, running = m.id in running, lastRun = lastRuns[m.id],
                     onToggle = { vm.setEnabled(m.id, it) },
                     onRun = {
                         if (!MacroEngine.start(m)) Toast.makeText(
@@ -221,12 +224,12 @@ private fun EmptyState() {
 
 @Composable
 private fun MacroCard(
-    m: Macro, running: Boolean,
+    m: Macro, running: Boolean, lastRun: Long?,
     onToggle: (Boolean) -> Unit, onRun: () -> Unit, onStop: () -> Unit,
     onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     val next = remember(m) {
-        if (m.enabled) Scheduler.nextTrigger(m)?.format(DateTimeFormatter.ofPattern("EEE h:mm a", Locale.getDefault())) else null
+        if (m.enabled) Scheduler.nextTrigger(m)?.format(DateTimeFormatter.ofPattern("EEE h:mm:ss a", Locale.getDefault())) else null
     }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
@@ -257,6 +260,11 @@ private fun MacroCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = if (running) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Text(
+                lastRunLabel(lastRun),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (running) FilledTonalButton(onClick = onStop) {
@@ -269,6 +277,18 @@ private fun MacroCard(
                 IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, "Delete") }
             }
         }
+    }
+}
+
+private fun lastRunLabel(at: Long?): String {
+    if (at == null) return "Last run: never"
+    val dt = java.time.Instant.ofEpochMilli(at).atZone(java.time.ZoneId.systemDefault())
+    val today = java.time.LocalDate.now()
+    val time = dt.format(DateTimeFormatter.ofPattern("h:mm:ss a", Locale.getDefault()))
+    return when (dt.toLocalDate()) {
+        today -> "Last run: today, $time"
+        today.minusDays(1) -> "Last run: yesterday, $time"
+        else -> "Last run: " + dt.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())) + ", $time"
     }
 }
 

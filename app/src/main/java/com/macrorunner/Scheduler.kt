@@ -21,7 +21,7 @@ object Scheduler {
         for (offset in 0..7) {
             val date = from.toLocalDate().plusDays(offset.toLong())
             if (date.dayOfWeek.value !in m.days) continue
-            val dt = date.atTime(m.hour, m.minute).atZone(from.zone)
+            val dt = date.atTime(m.hour, m.minute, m.second).atZone(from.zone)
             if (dt.isAfter(from)) return dt
         }
         return null

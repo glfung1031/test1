@@ -35,10 +35,11 @@ data class Macro(
     val days: Set<Int> = emptySet(),  // ISO: Monday=1 .. Sunday=7. Empty = manual only
     val hour: Int = 9,
     val minute: Int = 0,
+    val second: Int = 0,
     val steps: List<Step> = emptyList()
 ) {
     fun timeLabel(): String =
-        LocalTime.of(hour, minute).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+        LocalTime.of(hour, minute, second).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.MEDIUM))
 }
 
 fun List<Step>.totalSteps(): Int = sumOf { 1 + it.children.totalSteps() }

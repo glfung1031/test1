@@ -46,6 +46,33 @@ class MacroAccessibilityService : AccessibilityService() {
     }
 }
 
+/** Remembers when each macro last started. Kept apart from the macro list so edits never overwrite it. */
+object RunLog {
+    private const val PREFS = "run_log"
+    val lastRun = MutableStateFlow<Map<String, Long>>(emptyMap())
+    @Volatile private var loaded = false
+
+    private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    @Synchronized fun load(ctx: Context) {
+        if (loaded) return
+        lastRun.value = prefs(ctx).all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } }.toMap()
+        loaded = true
+    }
+
+    @Synchronized fun record(ctx: Context, id: String, at: Long = System.currentTimeMillis()) {
+        load(ctx)
+        prefs(ctx).edit().putLong(id, at).apply()
+        lastRun.update { it + (id to at) }
+    }
+
+    @Synchronized fun clear(ctx: Context, id: String) {
+        load(ctx)
+        prefs(ctx).edit().remove(id).apply()
+        lastRun.update { it - id }
+    }
+}
+
 object MacroEngine {
     val running = MutableStateFlow<Set<String>>(emptySet())
     private val jobs = ConcurrentHashMap<String, Job>()
@@ -63,6 +90,7 @@ object MacroEngine {
         val job = svc.scope.launch(start = CoroutineStart.LAZY) {
             val cpu = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "macrorunner:run")
             cpu.acquire(60 * 60 * 1000L)
+            RunLog.record(svc, macro.id)
             try {
                 runSteps(svc, macro.steps)
             } catch (e: CancellationException) {

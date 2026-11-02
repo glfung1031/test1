@@ -58,6 +58,8 @@ fun EditorScreen(initial: Macro, isNew: Boolean, onSave: (Macro) -> Unit, onCanc
     var days by remember { mutableStateOf(initial.days) }
     var hour by remember { mutableIntStateOf(initial.hour) }
     var minute by remember { mutableIntStateOf(initial.minute) }
+    var second by remember { mutableIntStateOf(initial.second) }
+    var showTime by remember { mutableStateOf(false) }
     var steps by remember { mutableStateOf(initial.steps) }
     var pickParent by remember { mutableStateOf<StepPath?>(null) }
     var dialog by remember { mutableStateOf<StepDialogState?>(null) }
@@ -73,7 +75,7 @@ fun EditorScreen(initial: Macro, isNew: Boolean, onSave: (Macro) -> Unit, onCanc
                 actions = {
                     Button(
                         enabled = name.isNotBlank(),
-                        onClick = { onSave(initial.copy(name = name.trim(), days = days, hour = hour, minute = minute, steps = steps)) }
+                        onClick = { onSave(initial.copy(name = name.trim(), days = days, hour = hour, minute = minute, second = second, steps = steps)) }
                     ) { Text("Save") }
                     Spacer(Modifier.width(12.dp))
                 },
@@ -101,7 +103,7 @@ fun EditorScreen(initial: Macro, isNew: Boolean, onSave: (Macro) -> Unit, onCanc
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    LocalTime.of(hour, minute).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)),
+                                    LocalTime.of(hour, minute, second).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.MEDIUM)),
                                     style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold
                                 )
                                 Text(
@@ -110,9 +112,7 @@ fun EditorScreen(initial: Macro, isNew: Boolean, onSave: (Macro) -> Unit, onCanc
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            FilledTonalButton(onClick = {
-                                TimePickerDialog(ctx, { _, h, m -> hour = h; minute = m }, hour, minute, DateFormat.is24HourFormat(ctx)).show()
-                            }) { Text("Set time") }
+                            FilledTonalButton(onClick = { showTime = true }) { Text("Set time") }
                         }
                     }
                 }
@@ -145,6 +145,14 @@ fun EditorScreen(initial: Macro, isNew: Boolean, onSave: (Macro) -> Unit, onCanc
             }
             item { Spacer(Modifier.height(48.dp)) }
         }
+    }
+
+    if (showTime) {
+        TimeDialog(
+            hour, minute, second, DateFormat.is24HourFormat(ctx),
+            onDismiss = { showTime = false },
+            onConfirm = { h, m, s -> hour = h; minute = m; second = s; showTime = false }
+        )
     }
 
     pickParent?.let { parent ->
@@ -229,6 +237,47 @@ private fun NumField(label: String, value: String, onChange: (String) -> Unit, m
         onValueChange = { v -> onChange(v.filter { it.isDigit() || (decimal && it == '.') }) },
         label = { Text(label) }, singleLine = true, modifier = modifier,
         keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number)
+    )
+}
+
+@Composable
+private fun TimeDialog(
+    hour: Int, minute: Int, second: Int, is24: Boolean,
+    onDismiss: () -> Unit, onConfirm: (Int, Int, Int) -> Unit
+) {
+    var h by remember { mutableStateOf(if (is24) hour.toString() else (if (hour % 12 == 0) 12 else hour % 12).toString()) }
+    var m by remember { mutableStateOf(minute.toString().padStart(2, '0')) }
+    var s by remember { mutableStateOf(second.toString().padStart(2, '0')) }
+    var pm by remember { mutableStateOf(hour >= 12) }
+
+    val hv = h.toIntOrNull(); val mv = m.toIntOrNull(); val sv = s.toIntOrNull()
+    val hour24: Int? = when {
+        hv == null -> null
+        is24 -> if (hv in 0..23) hv else null
+        else -> if (hv in 1..12) (hv % 12) + (if (pm) 12 else 0) else null
+    }
+    val valid = hour24 != null && mv != null && mv in 0..59 && sv != null && sv in 0..59
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Trigger time") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    NumField(if (is24) "Hour (0–23)" else "Hour", h, { h = it.take(2) }, Modifier.weight(1f))
+                    NumField("Min", m, { m = it.take(2) }, Modifier.weight(1f))
+                    NumField("Sec", s, { s = it.take(2) }, Modifier.weight(1f))
+                }
+                if (!is24) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = !pm, onClick = { pm = false }, label = { Text("AM") })
+                    FilterChip(selected = pm, onClick = { pm = true }, label = { Text("PM") })
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = { onConfirm(hour24!!, mv!!, sv!!) }) { Text("OK") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
