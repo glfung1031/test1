@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.MacroRunner" parent="android:Theme.DeviceDefault.NoActionBar" />
+</resources>
