@@ -1,4 +1,0 @@
-<resources>
-    <string name="app_name">Macro Runner</string>
-    <string name="a11y_description">Lets Macro Runner perform the taps and swipes you define in your macros, at the times you schedule. It does not read or collect any screen content.</string>
-</resources>
